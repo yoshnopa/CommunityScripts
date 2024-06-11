@@ -68,6 +68,7 @@ required_durations = {}
 semaphore = asyncio.Semaphore(config.CONCURRENT_TASK_LIMIT)
 progress = 0
 increment = 0.0
+vr_tag = ""
 
 # ----------------- Main Execution -----------------
 
@@ -141,7 +142,9 @@ async def tag_images():
 
 async def tag_scenes():
     global increment
-    scenes = stash.find_scenes(f={"tags": {"value":tagme_tag_id, "modifier":"INCLUDES"}}, fragment="id files {path}")
+    global vr_tag
+    vr_tag = stash.get_configuration()["ui"]["vrTag"]
+    scenes = stash.find_scenes(f={"tags": {"value":tagme_tag_id, "modifier":"INCLUDES"}}, fragment="id files {path} tags {name}")
     increment = 1.0 / len(scenes)
     if scenes:
         tasks = [__tag_scene(scene) for scene in scenes]
@@ -221,8 +224,9 @@ async def __tag_scene(scene):
     async with semaphore:
         scenePath = scene['files'][0]['path']
         sceneId = scene['id']
+        sceneIsVR = vr_tag in [tag["name"] for tag in scene["tags"]]
         try:
-            server_result = VideoResult(**await process_video_async(scenePath))
+            server_result = VideoResult(**await process_video_async(scenePath, sceneIsVR))
             process_server_video_result(server_result, sceneId, scenePath)
         except Exception as e:
             log.error(f"Failed to process video: {e}")
@@ -332,9 +336,9 @@ async def process_images_async(image_paths):
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1800)) as session:
         return await call_api_async(session, 'process_images/', {"paths": image_paths})
     
-async def process_video_async(video_path):
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1800)) as session:
-        return await call_api_async(session, 'process_video/', {"path": video_path})
+async def process_video_async(video_path, isVR):
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=86400)) as session:
+        return await call_api_async(session, 'process_video/', {"path": video_path, "isVR": isVR})
     
 class VideoResult(pydantic.BaseModel):
     result: Any
