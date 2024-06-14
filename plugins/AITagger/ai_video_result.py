@@ -85,13 +85,45 @@ class AIVideoResult(BaseModel):
             return
         media_handler.remove_ai_markers_from_video(self.video_metadata.video_id)
 
-        for tag_name, tag_data in self.tags.items():
+        #Merging two tags together, removing duplicates
+        def add_non_duplicates_by_key(l1, l2, key):
+            seen_values = set([getattr(x, key) for x in l1])
+            unique_l = []
+            for item in l2:
+                value = getattr(item, key)
+            if value not in seen_values:
+                unique_l.append(item)
+                seen_values.add(value)
+            return unique_l
+
+        markerTags = self.tags
+        subtagmapping = {}
+        for tag_name, tag_data in self.tags.copy().items():
+            if media_handler.get_tag_merge(tag_name) in ["merge", "subtag"]:
+                server_tag = media_handler.get_tag_merge_server_tag(tag_name)
+                if not server_tag in markerTags:
+                    if not media_handler.is_ai_marker_supported(server_tag):
+                        log.error("Defined Tag " + tag_name + " as " + media_handler.get_tag_merge(tag_name) +
+                                  ", but " + server_tag + " is not a valid ai server tag! Skipping this definition.")
+                    else:
+                        markerTags[server_tag] = tag_data
+                        del markerTags[tag_name]
+                        #if media_handler.get_tag_merge(tag_name) == "subtag":
+                        #    subtagmapping[server_tag] = media_handler.get_tag_id(tag_name)
+                else:
+                    add_non_duplicates_by_key(markerTags[server_tag].time_frames, tag_data.time_frames, "start")
+                    del markerTags[tag_name]
+                    #if media_handler.get_tag_merge(tag_name) == "subtag":
+                    #    subtagmapping[server_tag] = media_handler.get_tag_id(tag_name)
+
+        for tag_name, tag_data in markerTags.items():
             if media_handler.is_ai_marker_supported(tag_name):
                 tag_threshold = media_handler.get_tag_threshold(tag_name)
                 frame_interval = self.video_metadata.models[tag_data.ai_model_name].ai_model_config.frame_interval
                 tag_id = media_handler.get_tag_id(tag_name)
                 max_gap = media_handler.get_max_gap(tag_name)
                 min_duration = media_handler.get_min_duration(tag_name)
+                subtags = subtagmapping.get(tag_name, [])
                 merged_time_frames = []
                 for time_frame in tag_data.time_frames:
                     if time_frame.confidence < tag_threshold:
@@ -113,7 +145,7 @@ class AIVideoResult(BaseModel):
                             else:
                                 merged_time_frames.append(deepcopy(time_frame))
                 merged_time_frames = [tf for tf in merged_time_frames if (tf.end or tf.start) - tf.start + frame_interval >= min_duration]
-                media_handler.add_markers_to_video(self.video_metadata.video_id, tag_id, tag_name, merged_time_frames)
+                media_handler.add_markers_to_video(self.video_metadata.video_id, tag_id, tag_name, subtags, merged_time_frames)
 
     def already_contains_model(self, model_config):
         correspondingModelInfo = self.video_metadata.models.get(model_config.pipeline_short_name)
