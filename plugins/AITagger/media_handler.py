@@ -11,6 +11,8 @@ max_gaps = {}
 min_durations = {}
 required_durations = {}
 tag_thresholds = {}
+tag_merges = {}
+tag_merge_server_tags = {}
 
 def initialize(connection):
     global stash
@@ -52,6 +54,12 @@ def get_tag_id(tag_name):
 
 def get_tag_threshold(tag_name):
     return tag_thresholds.get(tag_name, 0.5)
+
+def get_tag_merge(tag_name):
+    return tag_merges.get(tag_name, "standalone")
+
+def get_tag_merge_server_tag(tag_name):
+    return tag_merge_server_tags.get(tag_name, "")
 
 def is_ai_tag(tag_name):
     return tag_name in tagname_mappings
@@ -160,9 +168,9 @@ def get_min_duration(tag_name):
 def get_max_gap(tag_name):
     return max_gaps.get(tag_name, 0)
 
-def add_markers_to_video(video_id, tag_id, tag_name, time_frames):
+def add_markers_to_video(video_id, tag_id, tag_name, subtags, time_frames):
     for time_frame in time_frames:
-        stash.create_scene_marker({"scene_id": video_id, "primary_tag_id":tag_id, "tag_ids": [tag_id], "seconds": time_frame.start, "title":tagname_mappings[tag_name]})
+        stash.create_scene_marker({"scene_id": video_id, "primary_tag_id":tag_id, "tag_ids": subtags, "seconds": time_frame.start, "title":tagname_mappings[tag_name]})
 
 def remove_ai_markers_from_video(video_id):
     ai_tags = set(tagid_mappings.values())
@@ -180,6 +188,8 @@ def parse_csv(file_path):
     global min_durations
     global required_durations
     global tag_thresholds
+    global tag_merges
+    global tag_merge_server_tags
 
     with open(file_path, mode='r') as infile:
         reader = csv.DictReader(infile)
@@ -190,6 +200,8 @@ def parse_csv(file_path):
             max_gap = float(row.get('MaxGap', 0)) #float(row['MaxGap'])
             required_duration = row.get('RequiredDuration', "200%")
             tag_threshold = float(row.get('TagThreshold', 0.5))
+            tag_merge = row.get('TagMerge', "standalone")
+            tag_merge_server_tag = row.get('TagMergeServerTag', "")
 
             tag = stash.find_tag(stash_tag)
             if not tag:
@@ -202,3 +214,5 @@ def parse_csv(file_path):
                 max_gaps[server_tag] = max_gap
             required_durations[server_tag] = required_duration
             tag_thresholds[server_tag] = tag_threshold
+            tag_merges[server_tag] = tag_merge
+            tag_merge_server_tags[server_tag] = tag_merge_server_tag
