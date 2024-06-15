@@ -94,9 +94,10 @@ class AIVideoResult(BaseModel):
                 if value not in seen_values:
                     unique_l.append(item)
                     seen_values.add(value)
+            unique_l.sort(key=lambda d: int(d.start))
             return unique_l
 
-        markerTags = self.tags
+        markerTags = self.tags.copy()
         subtagmapping = {}
         for tag_name, tag_data in self.tags.copy().items():
             if media_handler.get_tag_merge(tag_name) in ["merge", "subtag"]:
@@ -119,8 +120,6 @@ class AIVideoResult(BaseModel):
         for tag_name, tag_data in markerTags.items():
             if media_handler.is_ai_marker_supported(tag_name):
                 tag_threshold = media_handler.get_tag_threshold(tag_name)
-                if tag_name == "Vaginal Fucking":
-                    log.info(str([(x.start, x.end) for x in tag_data.time_frames if x.confidence > tag_threshold]))
                 frame_interval = self.video_metadata.models[tag_data.ai_model_name].ai_model_config.frame_interval
                 tag_id = media_handler.get_tag_id(tag_name)
                 max_gap = media_handler.get_max_gap(tag_name)
@@ -147,8 +146,6 @@ class AIVideoResult(BaseModel):
                             else:
                                 merged_time_frames.append(deepcopy(time_frame))
                 merged_time_frames = [tf for tf in merged_time_frames if (tf.end or tf.start) - tf.start + frame_interval >= min_duration]
-                if tag_name == "Vaginal Fucking":
-                    log.info(str(merged_time_frames))
                 media_handler.add_markers_to_video(self.video_metadata.video_id, tag_id, tag_name, subtags, merged_time_frames)
 
     def already_contains_model(self, model_config):
